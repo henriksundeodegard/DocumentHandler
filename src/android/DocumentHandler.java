@@ -18,6 +18,13 @@ import android.os.AsyncTask;
 import android.webkit.CookieManager;
 import android.webkit.MimeTypeMap;
 
+import android.support.v4.content.FileProvider;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import java.util.List;
+
+
 public class DocumentHandler extends CordovaPlugin {
 
 	public static final String HANDLE_DOCUMENT_ACTION = "HandleDocumentWithURL";
@@ -71,11 +78,14 @@ public class DocumentHandler extends CordovaPlugin {
 				conn.setRequestProperty("Cookie", auth);
 			}
 
+			Context context = cordova.getActivity().getApplicationContext();
+			
 			InputStream reader = conn.getInputStream();
 
 			String extension = MimeTypeMap.getFileExtensionFromUrl(url);
 			File f = File.createTempFile(FILE_PREFIX, "." + extension,
-					null);
+					context.getExternalFilesDir(null));
+			
 			// make sure the receiving app can read this file
 			f.setReadable(true, false);
 			FileOutputStream outStream = new FileOutputStream(f);
@@ -88,6 +98,7 @@ public class DocumentHandler extends CordovaPlugin {
 			}
 			reader.close();
 			outStream.close();
+			
 			return f;
 
 		} catch (FileNotFoundException e) {
@@ -157,9 +168,18 @@ public class DocumentHandler extends CordovaPlugin {
 
 			// start an intent with the file
 			try {
+				Uri uri = FileProvider.getUriForFile(context, "com.unipluss.unie24.provider", result);
+				
 				Intent intent = new Intent(Intent.ACTION_VIEW);
-				intent.setDataAndType(Uri.fromFile(result), mimeType);
+				intent.setDataAndType(uri, mimeType);
 				intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				
+				List<ResolveInfo> resInfoList = context.getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+				for (ResolveInfo resolveInfo : resInfoList) {
+				    String packageName = resolveInfo.activityInfo.packageName;
+				    context.grantUriPermission(packageName, uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+				}
+				
 				context.startActivity(intent);
 
 				callbackContext.success(); // Thread-safe.
@@ -169,8 +189,6 @@ public class DocumentHandler extends CordovaPlugin {
 				e.printStackTrace();
 				callbackContext.error(ERROR_NO_HANDLER_FOR_DATA_TYPE);
 			}
-
 		}
 	}
-
 }
